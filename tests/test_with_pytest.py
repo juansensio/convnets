@@ -1,6 +1,5 @@
-def test_always_passes():
-    assert True
+from convnets import hello
 
-
-# def test_always_fails():
-#     assert False
+def test_hello():
+    print(hello())
+    assert hello() 
