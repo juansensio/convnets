@@ -35,5 +35,5 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests
-          coverage report
+          poetry run pytest tests
+          poetry run coverage report
