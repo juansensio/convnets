@@ -11,8 +11,11 @@ def fit(
     epochs=20,
     overfit=0,
     log=True,
-    compile=False
+    compile=False,
+    on_epoch_end=None,
+    limit_train_batches=0,
 ):
+    print("Training model on", device)
     if compile:
         print("Compiling model...", end=" ")
         torch.set_float32_matmul_precision('high')
@@ -42,6 +45,8 @@ def fit(
             mb.child.comment = f"loss {np.mean(train_loss):.5f} error {np.mean(train_err):.5f}"
             if overfit and batch_ix > overfit:
                 break
+            if limit_train_batches and batch_ix > limit_train_batches:
+                break
         hist['error'].append(np.mean(train_err))
         hist['loss'].append(np.mean(train_loss))
         _log = f"loss {np.mean(train_loss):.5f} error {np.mean(train_err):.5f}"
@@ -64,4 +69,6 @@ def fit(
         mb.main_bar.comment = _log
         if log: 
             mb.write(f"Epoch {epoch}/{epochs} " + _log)
+        if on_epoch_end is not None:
+            on_epoch_end(hist, model, optimizer, epoch)
     return hist

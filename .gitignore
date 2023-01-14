@@ -4,3 +4,4 @@ __pycache__
 .coverage
 .ipynb_checkpoints
 data
+db.sqlite3
