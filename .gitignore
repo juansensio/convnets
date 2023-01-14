@@ -5,3 +5,6 @@ __pycache__
 .ipynb_checkpoints
 data
 db.sqlite3
+*.pth 
+*.ckpt 
+checkpoints
