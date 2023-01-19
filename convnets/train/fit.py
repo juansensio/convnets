@@ -14,6 +14,7 @@ def fit(
     compile=False,
     on_epoch_end=None,
     limit_train_batches=0,
+    use_amp = True, 
 ):
     print("Training model on", device)
     if compile:
@@ -24,6 +25,7 @@ def fit(
     model.to(device)
     mb = master_bar(range(1, epochs+1))
     hist = {'error': [], 'epoch': [], 'loss': []}
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     if not overfit and 'val' in dataloader:
         hist['val_error'] = []
         hist['val_loss'] = []
@@ -35,10 +37,14 @@ def fit(
             X, y = batch
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
-            y_hat = model(X)
-            loss = criterion(y_hat, y)
-            loss.backward()
-            optimizer.step()
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                y_hat = model(X)
+                loss = criterion(y_hat, y)
+            scaler.scale(loss).backward()
+            # gradient clipping
+            #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
+            scaler.step(optimizer)
+            scaler.update()
             train_loss.append(loss.item())
             acc = (y == torch.argmax(y_hat, axis=1)).sum().item() / len(y)
             train_err.append(1. - acc)
