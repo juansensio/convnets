@@ -24,7 +24,7 @@ def fit(
     model.to(device)
     mb = master_bar(range(1, epochs+1))
     hist = {'error': [], 'epoch': [], 'loss': []}
-    if not overfit and 'test' in dataloader:
+    if not overfit and 'val' in dataloader:
         hist['val_error'] = []
         hist['val_loss'] = []
     for epoch in mb:
@@ -50,11 +50,11 @@ def fit(
         hist['error'].append(np.mean(train_err))
         hist['loss'].append(np.mean(train_loss))
         _log = f"loss {np.mean(train_loss):.5f} error {np.mean(train_err):.5f}"
-        if not overfit and 'test' in dataloader:
+        if not overfit and 'val' in dataloader:
             val_loss, val_error = [], []
             model.eval()
             with torch.no_grad():
-                for batch in progress_bar(dataloader['test'], parent=mb):
+                for batch in progress_bar(dataloader['val'], parent=mb):
                     X, y = batch
                     X, y = X.to(device), y.to(device)
                     y_hat = model(X)
