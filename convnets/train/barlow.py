@@ -57,7 +57,6 @@ def barlow_fit(model, dataloader, optimizer, scheduler=None, use_amp = True, epo
         if ssl_eval is not None and not epoch % eval_each:
             print("evaluating ...")
             ssl_eval(model)
-            model.to(device)
         mb.main_bar.comment = _log
         if log: 
             mb.write(f"Epoch {epoch}/{epochs} " + _log)

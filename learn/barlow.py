@@ -13,12 +13,12 @@ MLP_DIM = 2048
 BATCH_SIZE = 256
 EPOCHS = 300
 LR = 1e-3
-PCTG_START=0.03
-EVAL_EACH = 2
+PCTG_START = 0.03
+EVAL_EACH = 10
 
 seco = SeCo()
 
-dataset = SSLDataset(seco.data.image.values, trans=A.Compose([
+dataset = SSLDataset(seco.data.image.values, seco.bands, trans=A.Compose([
     A.RandomResizedCrop(224, 224, scale=(0.5, 1.0), p=1),
     A.HorizontalFlip(p=0.5),
     A.VerticalFlip(p=0.5),
@@ -50,7 +50,8 @@ def ssl_eval(SSLmodel):
         'train': DataLoader(dataset['train'], batch_size=256, shuffle=True, num_workers=10, pin_memory=True),
         'val': DataLoader(dataset['val'], batch_size=256, shuffle=False, num_workers=10, pin_memory=True),
     }
-    model2 = BarlowTwins(backbone, f2=MLP_DIM)
+    backbone2 = torch.nn.Sequential(*list(torchvision.models.resnet18().children())[:-1])
+    model2 = BarlowTwins(backbone2, f2=MLP_DIM)
     model2.load_state_dict(SSLmodel.state_dict())
     # we freeze the weights of the pretrained model so they don't get updated
     for param in model2.parameters():
@@ -69,7 +70,7 @@ def ssl_eval(SSLmodel):
     return 
 
 
-hist = barlow_fit(model, dataloader, optimizer, scheduler, epochs=EPOCHS, limit_train_batches=2,  eval_each=EVAL_EACH, ssl_eval=ssl_eval)
+hist = barlow_fit(model, dataloader, optimizer, scheduler, epochs=EPOCHS, eval_each=EVAL_EACH, ssl_eval=ssl_eval)
 
 df = pd.DataFrame(hist)
 df.to_csv('barlow.csv', index=False)
