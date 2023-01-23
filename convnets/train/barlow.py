@@ -2,22 +2,6 @@ import torch
 from fastprogress.fastprogress import master_bar, progress_bar
 import numpy as np
 
-def SSLeval(SSLmodel):
-    torch.jit.script(SSLmodel.backbone.cpu()).save('SSLbackbone.pt')
-    ds = {
-        'train': Dataset(),
-        'test': Dataset(train=False)
-    }
-    batch_size = 1024
-    dl = {
-        'train': torch.utils.data.DataLoader(ds['train'], batch_size=batch_size, shuffle=True, num_workers=num_workers),
-        'test': torch.utils.data.DataLoader(ds['test'], batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    }
-    FTmodel = FTModel('SSLbackbone.pt')
-    optimizer = torch.optim.Adam(FTmodel.parameters(), lr=1e-3)
-    hist = train(FTmodel, dl, optimizer, epochs=3)
-    return hist['acc'][-1], hist['test_acc'][-1]
-
 def barlow_step(model, batch, device, l=5e-3):
     # two randomly augmented versions of x
     x1, x2 = batch
@@ -42,7 +26,7 @@ def barlow_step(model, batch, device, l=5e-3):
     c_diff[~d] *= l
     return c_diff.sum()
 
-def barlow_fit(model, dataloader, optimizer, scheduler=None, use_amp = True, epochs=10, device="cuda", log=True, eval_each=10, limit_train_batches=0):
+def barlow_fit(model, dataloader, optimizer, scheduler=None, use_amp = True, epochs=10, device="cuda", log=True, eval_each=10, limit_train_batches=0, ssl_eval=None):
     print("Training model on", device)
     model.to(device)
     mb = master_bar(range(1, epochs+1))
@@ -70,11 +54,9 @@ def barlow_fit(model, dataloader, optimizer, scheduler=None, use_amp = True, epo
         _log = f"loss {np.mean(train_loss):.5f}"
         scheduler.step()
         # eval
-        # if not epoch % eval_each:
-        #     print("evaluating ...")
-        #     val_train_acc, val_test_acc = SSLeval(model)
-        #     hist['acc'].append(val_train_acc)
-        #     hist['test_acc'].append(val_test_acc)
+        if not epoch % eval_each:
+            print("evaluating ...")
+            ssl_eval(model)
         mb.main_bar.comment = _log
         if log: 
             mb.write(f"Epoch {epoch}/{epochs} " + _log)
