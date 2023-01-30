@@ -13,7 +13,7 @@ import argparse
 
 # resize image by keeping the aspect ratio and cropping the center
 def resize_and_crop(path, size=256):
-    img = Image.open(path)
+    img = Image.open(path).convert('RGB') # some images are RGBA
     w, h = img.size
     ar = w / h
     if ar > 1:
