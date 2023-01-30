@@ -72,12 +72,12 @@ def process(base_path = 'data/ILSVRC', dst_path = 'data/imagenet256', size=256, 
     assert len(val.label.unique()) == len(classes)
     assert len(val) == 50000
     # repeat for test
-    test_images = glob(f'{path}/test/*.JPEG')
-    assert len(test_images) == 100000
+    test = glob(f'{path}/test/*.JPEG')
+    assert len(test) == 100000
     # process images in parallel
     args = [(dst_path, 'train', img, size, cls) for img, cls in zip(train.image.values, train['class'].values)] + \
         [(dst_path, 'val', img, size, cls) for img, cls in zip(val.image.values, val['class'].values)] + \
-        [(dst_path, 'test', img, size, None) for img in test_images]
+        [(dst_path, 'test', img, size, None) for img in test]
     print("Processing images...")
     num_cores = multiprocessing.cpu_count() if workers is None else workers
     with ThreadPoolExecutor(max_workers=num_cores) as pool:
@@ -91,7 +91,7 @@ def process(base_path = 'data/ILSVRC', dst_path = 'data/imagenet256', size=256, 
             for future in futures:
                 result = future.result()
                 results.append(result)
-    assert len(results) == len(train) + len(val)
+    assert len(results) == len(train) + len(val) + len(test)
 
 
 if __name__ == '__main__':
