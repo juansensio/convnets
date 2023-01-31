@@ -2,14 +2,17 @@ import os
 from glob import glob 
 from pathlib import Path
 import pandas as pd
-import random
-import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 import argparse
+from torch.utils.data import Dataset
+import pandas as pd
+from skimage import io
+import numpy as np
+from einops import rearrange
 
 # resize image by keeping the aspect ratio and cropping the center
 def resize_and_crop(path, size=256):
@@ -93,6 +96,68 @@ def process(base_path = 'data/ILSVRC', dst_path = 'data/imagenet256', size=256, 
                 results.append(result)
     assert len(results) == len(train) + len(val) + len(test)
 
+def compute_mean_std(image):
+    image = io.imread(image).astype(np.float32) / 255
+    return image.mean(axis=(0,1)), image.std(axis=(0,1))
+
+def compute_stats(images, workers=None):
+    num_cores = multiprocessing.cpu_count() if workers is None else workers
+    with ThreadPoolExecutor(max_workers=num_cores) as pool:
+        with tqdm(total=len(images)) as progress:
+            futures = []
+            for img in images:
+                future = pool.submit(compute_mean_std, img) 
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+            results = []
+            for future in futures:
+                result = future.result()
+                results.append(result)
+    mean, std = zip(*results)
+    return np.array(mean).mean(axis=0), np.array(std).mean(axis=0)
+
+class Imagenet(Dataset):
+    def __init__(self, path, mode, trans=None, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+        assert mode in ['train', 'val', 'test'], 'mode must be train, val or test'
+        self.labels = None
+        if mode == 'test':
+            self.images = glob(str(path/'test/*.JPEG'))
+            assert len(self.images) == 100000
+        else:
+            classes = sorted(os.listdir(path/mode))
+            assert len(classes) == 1000
+            images, labels = [], []
+            for i, c in enumerate(classes):
+                this_images = glob(str(path/mode/c/'*.JPEG'))
+                images += this_images
+                labels += [i] * len(this_images)
+            if mode == 'train':
+                assert len(images) == 1281167
+            else:
+                assert len(images) == 50000
+            self.images, self.labels = images, labels
+        self.trans = trans 
+        self.mean = np.array(mean).astype(np.float32)
+        self.std = np.array(std).astype(np.float32)
+
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, ix):
+        # read image
+        im = io.imread(self.images[ix])
+        # apply transformations on uint8 RGB images
+        if self.trans is not None:
+            im = self.trans(image=im)['image']
+        # normalize
+        im = im.astype(np.float32) / 255.
+        im = (im - self.mean) / self.std
+        im = rearrange(im, 'h w c -> c h w')
+        # read label if available
+        if self.labels is not None:
+            return im, self.labels[ix]
+        return im
+        
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process imagenet.')
