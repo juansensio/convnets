@@ -30,16 +30,16 @@ def fit(
     if rank == 0:
         print(f"Number of trainable parameters: {n_params}")
     if compile:
-        print(rank, "Compiling model ...")
+        torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+        torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
         # torch.set_float32_matmul_precision('high')
-        # model = torch.compile(model, backend="inductor")
-        model = torch.compile(model, backend="reduce-overhead")
+        print(rank, "Compiling model ...") # it can takw a while...
+        model = torch.compile(model)
     model.to(device)
-    mb = master_bar(range(1, epochs+1))
+    mb = master_bar(range(1, epochs+1)) if rank == 0 else range(1, epochs+1)
     hist = {'epoch': [], 'loss': [], 'lr': []}
     for metric in metrics.keys():
         hist[metric] = []
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     if not overfit and 'val' in dataloader:
         hist['val_loss'] = []
         for metric in metrics.keys():
@@ -50,7 +50,8 @@ def fit(
         for metric in metrics.keys():
             train_logs[metric] = []
         hist['epoch'].append(epoch)
-        for batch_ix, batch in enumerate(progress_bar(dataloader['train'], parent=mb)):
+        pbar = progress_bar(dataloader['train'], parent=mb) if rank == 0 else dataloader['train']
+        for batch_ix, batch in enumerate(pbar):
             X, y = batch
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
@@ -65,7 +66,7 @@ def fit(
             log = f"loss {np.mean(train_logs['loss']):.5f}"
             for metric in metrics.keys():
                 log += f" {metric} {np.mean(train_logs[metric]):.5f}"
-            mb.child.comment = log
+            if rank == 0: mb.child.comment = log
             if overfit and batch_ix > overfit:
                 break
             if limit_train_batches and batch_ix > limit_train_batches:
@@ -79,27 +80,31 @@ def fit(
                 val_logs[metric] = []
             model.eval()
             with torch.no_grad():
-                for batch in progress_bar(dataloader['val'], parent=mb):
+                pbar = progress_bar(dataloader['val'], parent=mb) if rank == 0 else dataloader['val']
+                for batch in pbar:
                     X, y = batch
                     X, y = X.to(device), y.to(device)
-                    y_hat = model(X)
-                    loss = criterion(y_hat, y)
+                    with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
+                        y_hat = model(X)
+                        loss = criterion(y_hat, y)
                     val_logs['loss'] .append(loss.item())
                     for metric in metrics.keys():
                         val_logs[metric].append(metrics[metric](y_hat, y).item())
-                    _log = f"val_loss {np.mean(val_logs['loss']):.5f}"
-                    for metric in metrics.keys():
-                        _log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
-                    mb.child.comment = _log
+                    if rank == 0:
+                        _log = f"val_loss {np.mean(val_logs['loss']):.5f}"
+                        for metric in metrics.keys():
+                            _log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
+                        mb.child.comment = _log
             hist['val_loss'].append(np.mean(val_logs['loss']))
             for metric in metrics.keys():
                 hist['val_' + metric].append(np.mean(val_logs[metric]))
-            log += f" val_loss {np.mean(val_logs['loss']):.5f}"
-            for metric in metrics.keys():
-                log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
+            if rank == 0:
+                log += f" val_loss {np.mean(val_logs['loss']):.5f}"
+                for metric in metrics.keys():
+                    log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
             after_val(val_logs)
         hist['lr'].append(optimizer.param_groups[0]['lr'])
-        mb.main_bar.comment = log
+        if rank == 0: mb.main_bar.comment = log
         if after_epoch_log and rank == 0: 
             mb.write(f"Epoch {epoch}/{epochs} " + log)
         if on_epoch_end is not None:
