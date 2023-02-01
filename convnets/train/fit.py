@@ -16,17 +16,24 @@ def fit(
     on_epoch_end=None,
     limit_train_batches=0,
     use_amp = True, 
-    after_val=lambda x: None
+    after_val=lambda x: None,
+    rank=0
 ):
+    if device == "cuda":
+        device_type = "cuda"
+        device = f"cuda:{rank}"
+    else: 
+        device_type = "cpu"
     print("Training model on", device)
     # count parameters
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Number of trainable parameters: {n_params}")
+    if rank == 0:
+        print(f"Number of trainable parameters: {n_params}")
     if compile:
-        print("Compiling model...", end=" ")
-        torch.set_float32_matmul_precision('high')
-        model = torch.compile(model)
-        print("Done.")
+        print(rank, "Compiling model ...")
+        # torch.set_float32_matmul_precision('high')
+        # model = torch.compile(model, backend="inductor")
+        model = torch.compile(model, backend="reduce-overhead")
     model.to(device)
     mb = master_bar(range(1, epochs+1))
     hist = {'epoch': [], 'loss': [], 'lr': []}
@@ -47,14 +54,11 @@ def fit(
             X, y = batch
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast(enabled=use_amp):
+            with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
                 y_hat = model(X)
                 loss = criterion(y_hat, y)
-            scaler.scale(loss).backward()
-            # gradient clipping
-            #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
-            scaler.step(optimizer)
-            scaler.update()
+            loss.backward()
+            optimizer.step()
             train_logs['loss'].append(loss.item())
             for metric in metrics.keys():
                 train_logs[metric].append(metrics[metric](y_hat, y).item())
@@ -96,7 +100,7 @@ def fit(
             after_val(val_logs)
         hist['lr'].append(optimizer.param_groups[0]['lr'])
         mb.main_bar.comment = log
-        if after_epoch_log: 
+        if after_epoch_log and rank == 0: 
             mb.write(f"Epoch {epoch}/{epochs} " + log)
         if on_epoch_end is not None:
             on_epoch_end(hist, model, optimizer, epoch)

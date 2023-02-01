@@ -21,6 +21,7 @@ def alexnet():
 				'height': 224
 			},
 			'HorizontalFlip': {},
-			'RGBShitf': {}
-		}
+			'RGBShift': {}
+		},
+		'path': '/fastdata/imagenet256',
 	}

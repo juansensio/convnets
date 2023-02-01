@@ -3,7 +3,7 @@ import torch.nn as nn
 # only works for 224x224x3 inputs !
 
 class Alexnet(nn.Module):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super(Alexnet, self).__init__()
         self.backbone = nn.Sequential(
             nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=2),

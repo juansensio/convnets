@@ -6,74 +6,106 @@ from convnets.train import fit
 import torch
 import os
 import torch.multiprocessing as mp
-import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 from convnets.models import Alexnet
+from convnets.datasets import ImageNet
+import albumentations as A
+from convnets.train.imagenet.metrics import top1_error, top5_error
+from convnets.train import seed_everything
 
-def train(config):
-    print(config)
+def train(rank, world_size, config):
+    seed_everything()
+    torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+    torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+    if rank == 0:
+        print(config)
     model = getattr(models, config['model'])(config)
-    # dataset = {
-    # 	'train': Imagenet(trans=config['trans']),
-    # 	'val': Imagenet(trans=config['trans'])
-    # }
-    # dataloader = {
-    # 	'train': DataLoader(
-    # 		dataset['train'], 
-    # 		batch_size=config['batch_size'], 
-    # 		shuffle=True, 
-    # 		num_workers=config['num_workers'],
-    # 		pin_memory=config['pin_memory']
-    # 	),
-    # 	'val': DataLoader(
-    # 		dataset['val'], 
-    # 		batch_size=config['batch_size'], 
-    # 		num_workers=config['num_workers'],
-    # 		pin_memory=config['pin_memory']
-    # 	),
-    # }
-    # optimizer = getattr(torch.optim, config['optimizer'])(**config['optimizer_params'])
-    # criterion = torch.nn.CrossEntropyLoss()
-    # hist = fit(
-    # 	model, 
-    # 	dataloader, 
-    # 	optimizer, 
-    # 	criterion, 
-    # 	device="cpu", 
-    # 	epochs=config['epochs'],
-    # 	overfit=0,
-    # 	log=True,
-    # 	compile=False,
-    # 	on_epoch_end=None,
-    # 	limit_train_batches=0,
-    # 	use_amp = True, 
-    # )
-    # return hist
+    trans = A.Compose([
+        getattr(A, t)(**t_params) for t, t_params in config['transforms'].items()
+    ])
+    dataset = {
+        'train': ImageNet(config['path'], 'train', trans=trans),
+        'val': ImageNet(config['path'], 'val', trans=A.CenterCrop(224, 224)) # for now...
+    }
+    if world_size > 1:
+        dist.init_process_group("nccl", init_method='env://', rank=rank, world_size=world_size)
+        model.to(rank)
+        model = DDP(model, device_ids=[rank])
+        sampler = {
+            'train': torch.utils.data.distributed.DistributedSampler(
+                dataset['train'],
+                num_replicas=world_size,
+                rank=rank
+            ),
+            'val': torch.utils.data.distributed.DistributedSampler(
+                dataset['val'],
+                num_replicas=world_size,
+                rank=rank
+            )
+        }
+    dataloader = {
+    	'train': DataLoader(
+    		dataset['train'], 
+    		batch_size=config['batch_size'], 
+    		shuffle=True if world_size == 1 else False, 
+    		num_workers=10,  # with ddp, num_workers must be 0 making it slower than 1 gpu with num_workers > 0 ...
+    		pin_memory=True,
+            sampler=sampler['train'] if world_size > 1 else None
+    	),
+    	'val': DataLoader(
+    		dataset['val'], 
+    		batch_size=config['batch_size'], 
+    		num_workers=10,
+    		pin_memory=True,
+            sampler=sampler['val'] if world_size > 1 else None
+    	),
+    }
+    optimizer = getattr(torch.optim, config['optimizer'])(model.parameters(), **config['optimizer_params'])
+    criterion = torch.nn.CrossEntropyLoss()
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.1, verbose=True, threshold_mode='abs')
+    metrics = {'t1err': top1_error, 't5err': top5_error}
+    hist = fit(
+        model, 
+        dataloader, 
+        optimizer, 
+        criterion,
+        metrics, 
+        'cuda', 
+        epochs=10, # original paper says 90 epochs 
+        after_val=lambda val_logs: scheduler.step(val_logs['t1err'][-1]),
+        rank=rank,
+        compile=True,
+        limit_train_batches=100 # comment to train on full dataset
+    )
 
-def example(rank, world_size):
+    if world_size > 1:
+        dist.destroy_process_group()
+
+def example(rank, world_size, config):
+    print(rank, world_size, config)
     # create default process group
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    dist.init_process_group("nccl", init_method='env://', rank=rank, world_size=world_size)
     # create local model
     model = Alexnet().to(rank)
     # construct DDP model
     ddp_model = DDP(model, device_ids=[rank])
-    output = ddp_model(torch.randn(32, 3, 32, 32), log=True)
+    output = ddp_model(torch.randn(32, 3, 224, 224))
     print(output.size())
     dist.destroy_process_group()
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process imagenet.')
     parser.add_argument('--base-config', help='Base configuration to be used for training', default="alexnet")
-    parser.add_argument('-world-size', help='Number of nodes for distrubuted training', default=1)
+    parser.add_argument('--world-size', help='Number of nodes for distrubuted training', default=1, type=int)
     args = parser.parse_args()
-    world_size = int(args.world_size)
-    if args.world_size > 1:
+    world_size = args.world_size
+    config = getattr(configs, args.base_config)()
+    if world_size > 1:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'
-        # fn = train 
-        fn = example
-        mp.spawn(fn, nprocs=world_size, args=(world_size,))
+        fn = train 
+        # fn = example
+        mp.spawn(fn, nprocs=world_size, args=(world_size, config))
     else:
-        config = getattr(configs, args.base_config)()
-        train(config)
+        train(0, 1, config)
