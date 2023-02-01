@@ -77,7 +77,7 @@ def train(rank, world_size, config):
         after_val=lambda val_logs: scheduler.step(val_logs['t1err'][-1]),
         rank=rank,
         # compile=True,
-        # limit_train_batches=100 # comment to train on full dataset
+        limit_train_batches=1000 # comment to train on full dataset
     )
 
     if world_size > 1:
