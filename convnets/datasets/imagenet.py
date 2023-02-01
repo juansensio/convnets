@@ -116,9 +116,10 @@ def compute_stats(images, workers=None):
     mean, std = zip(*results)
     return np.array(mean).mean(axis=0), np.array(std).mean(axis=0)
 
-class Imagenet(Dataset):
+class ImageNet(Dataset):
     def __init__(self, path, mode, trans=None, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
         assert mode in ['train', 'val', 'test'], 'mode must be train, val or test'
+        path = Path(path)
         self.labels = None
         if mode == 'test':
             self.images = glob(str(path/'test/*.JPEG'))

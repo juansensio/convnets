@@ -7,16 +7,21 @@ def fit(
     dataloader, 
     optimizer, 
     criterion, 
+    metrics,
     device="cpu", 
     epochs=20,
     overfit=0,
-    log=True,
+    after_epoch_log=True,
     compile=False,
     on_epoch_end=None,
     limit_train_batches=0,
     use_amp = True, 
+    after_val=lambda x: None
 ):
     print("Training model on", device)
+    # count parameters
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of trainable parameters: {n_params}")
     if compile:
         print("Compiling model...", end=" ")
         torch.set_float32_matmul_precision('high')
@@ -24,14 +29,19 @@ def fit(
         print("Done.")
     model.to(device)
     mb = master_bar(range(1, epochs+1))
-    hist = {'error': [], 'epoch': [], 'loss': []}
+    hist = {'epoch': [], 'loss': [], 'lr': []}
+    for metric in metrics.keys():
+        hist[metric] = []
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     if not overfit and 'val' in dataloader:
-        hist['val_error'] = []
         hist['val_loss'] = []
+        for metric in metrics.keys():
+            hist['val_' + metric] = []
     for epoch in mb:
         model.train()
-        train_loss, train_err = [], []
+        train_logs = {'loss': []}
+        for metric in metrics.keys():
+            train_logs[metric] = []
         hist['epoch'].append(epoch)
         for batch_ix, batch in enumerate(progress_bar(dataloader['train'], parent=mb)):
             X, y = batch
@@ -45,19 +55,24 @@ def fit(
             #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
             scaler.step(optimizer)
             scaler.update()
-            train_loss.append(loss.item())
-            acc = (y == torch.argmax(y_hat, axis=1)).sum().item() / len(y)
-            train_err.append(1. - acc)
-            mb.child.comment = f"loss {np.mean(train_loss):.5f} error {np.mean(train_err):.5f}"
+            train_logs['loss'].append(loss.item())
+            for metric in metrics.keys():
+                train_logs[metric].append(metrics[metric](y_hat, y).item())
+            log = f"loss {np.mean(train_logs['loss']):.5f}"
+            for metric in metrics.keys():
+                log += f" {metric} {np.mean(train_logs[metric]):.5f}"
+            mb.child.comment = log
             if overfit and batch_ix > overfit:
                 break
             if limit_train_batches and batch_ix > limit_train_batches:
                 break
-        hist['error'].append(np.mean(train_err))
-        hist['loss'].append(np.mean(train_loss))
-        _log = f"loss {np.mean(train_loss):.5f} error {np.mean(train_err):.5f}"
+        hist['loss'].append(np.mean(train_logs['loss']))
+        for metric in metrics.keys():
+            hist[metric].append(np.mean(train_logs[metric]))
         if not overfit and 'val' in dataloader:
-            val_loss, val_error = [], []
+            val_logs = {'loss': []}
+            for metric in metrics.keys():
+                val_logs[metric] = []
             model.eval()
             with torch.no_grad():
                 for batch in progress_bar(dataloader['val'], parent=mb):
@@ -65,16 +80,24 @@ def fit(
                     X, y = X.to(device), y.to(device)
                     y_hat = model(X)
                     loss = criterion(y_hat, y)
-                    val_loss.append(loss.item())
-                    acc = (y == torch.argmax(y_hat, axis=1)).sum().item() / len(y)
-                    val_error.append(1. - acc)
-                    mb.child.comment = f"val_loss {np.mean(val_loss):.5f} val_error {np.mean(val_error):.5f}"
-            hist['val_error'].append(np.mean(val_error))
-            hist['val_loss'].append(np.mean(val_loss))
-            _log += f" val_loss {np.mean(val_loss):.5f} val_error {np.mean(val_error):.5f}"
-        mb.main_bar.comment = _log
-        if log: 
-            mb.write(f"Epoch {epoch}/{epochs} " + _log)
+                    val_logs['loss'] .append(loss.item())
+                    for metric in metrics.keys():
+                        val_logs[metric].append(metrics[metric](y_hat, y).item())
+                    _log = f"val_loss {np.mean(val_logs['loss']):.5f}"
+                    for metric in metrics.keys():
+                        _log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
+                    mb.child.comment = _log
+            hist['val_loss'].append(np.mean(val_logs['loss']))
+            for metric in metrics.keys():
+                hist['val_' + metric].append(np.mean(val_logs[metric]))
+            log += f" val_loss {np.mean(val_logs['loss']):.5f}"
+            for metric in metrics.keys():
+                log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
+            after_val(val_logs)
+        hist['lr'].append(optimizer.param_groups[0]['lr'])
+        mb.main_bar.comment = log
+        if after_epoch_log: 
+            mb.write(f"Epoch {epoch}/{epochs} " + log)
         if on_epoch_end is not None:
             on_epoch_end(hist, model, optimizer, epoch)
     return hist
