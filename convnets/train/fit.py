@@ -26,8 +26,8 @@ def fit(
         device_type = "cpu"
     print("Training model on", device)
     # count parameters
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     if rank == 0:
+        n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"Number of trainable parameters: {n_params}")
     if compile:
         torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul

@@ -79,22 +79,9 @@ def train(rank, world_size, config):
         # compile=True,
         limit_train_batches=1000 # comment to train on full dataset
     )
-
     if world_size > 1:
         dist.destroy_process_group()
 
-def example(rank, world_size, config):
-    print(rank, world_size, config)
-    # create default process group
-    dist.init_process_group("nccl", init_method='env://', rank=rank, world_size=world_size)
-    # create local model
-    model = Alexnet().to(rank)
-    # construct DDP model
-    ddp_model = DDP(model, device_ids=[rank])
-    output = ddp_model(torch.randn(32, 3, 224, 224))
-    print(output.size())
-    dist.destroy_process_group()
-    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process imagenet.')
     parser.add_argument('--base-config', help='base configuration to be used for training', default="alexnet")
@@ -108,8 +95,6 @@ if __name__ == '__main__':
     if world_size > 1:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'
-        fn = train 
-        # fn = example
-        mp.spawn(fn, nprocs=world_size, args=(world_size, config))
+        mp.spawn(train, nprocs=world_size, args=(world_size, config))
     else:
         train(0, 1, config)
