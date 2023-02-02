@@ -8,11 +8,14 @@ import os
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
-from convnets.models import Alexnet
 from convnets.datasets import ImageNet
 import albumentations as A
-from convnets.train.imagenet.metrics import top1_error, top5_error
+from convnets.metrics import error, top5_error
 from convnets.train import seed_everything
+
+# TODO
+#   wandb lgogging
+#   distributed metrics
    
 def train(rank, world_size, config):
     seed_everything()
@@ -65,18 +68,17 @@ def train(rank, world_size, config):
     optimizer = getattr(torch.optim, config['optimizer'])(model.parameters(), **config['optimizer_params'])
     criterion = torch.nn.CrossEntropyLoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.1, verbose=True, threshold_mode='abs')
-    metrics = {'t1err': top1_error, 't5err': top5_error}
+    metrics = {'t1err': error, 't5err': top5_error}
     hist = fit(
         model, 
         dataloader, 
         optimizer, 
         criterion,
         metrics, 
-        config['device'], 
+        device=config['device'], 
         epochs=10, # original paper says 90 epochs 
-        after_val=lambda val_logs: scheduler.step(val_logs['t1err'][-1]),
+        after_val=lambda val_logs: scheduler.step(val_logs['t1err'][-1]), 
         rank=rank,
-        # compile=True,
         limit_train_batches=1000 # comment to train on full dataset
     )
     if world_size > 1:

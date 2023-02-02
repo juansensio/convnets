@@ -1,23 +1,26 @@
 import torch
 from fastprogress.fastprogress import master_bar, progress_bar
 import numpy as np
+from ..metrics import accuracy
 
 def fit(
     model, 
     dataloader, 
     optimizer, 
     criterion, 
-    metrics,
-    device="cpu", 
+    metrics={'acc': accuracy},
     epochs=20,
+    # debug
     overfit=0,
-    after_epoch_log=True,
-    compile=False,
-    on_epoch_end=None,
     limit_train_batches=0,
-    use_amp = True, 
-    after_val=lambda x: None,
-    rank=0
+    after_epoch_log=True,
+    # callbacks
+    on_epoch_end=lambda h,m,o,e: None,
+    after_val=lambda vl: None,
+    # device
+    device="cpu", 
+    rank=0,
+    compile=False,
 ):
     if device == "cuda":
         device_type = "cuda"
@@ -107,6 +110,5 @@ def fit(
         if rank == 0: mb.main_bar.comment = log
         if after_epoch_log and rank == 0: 
             mb.write(f"Epoch {epoch}/{epochs} " + log)
-        if on_epoch_end is not None:
-            on_epoch_end(hist, model, optimizer, epoch)
+        on_epoch_end(hist, model, optimizer, epoch)
     return hist
