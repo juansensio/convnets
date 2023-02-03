@@ -110,5 +110,5 @@ def fit(
         if rank == 0: mb.main_bar.comment = log
         if after_epoch_log and rank == 0: 
             mb.write(f"Epoch {epoch}/{epochs} " + log)
-        on_epoch_end(hist, model, optimizer, epoch)
+        on_epoch_end(hist, model, optimizer)
     return hist

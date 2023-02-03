@@ -1,0 +1,7 @@
+train:
+  overfit: 32
+  after_epoch_log: false
+  epochs: 100 
+
+dataloader: 
+  num_workers: 0

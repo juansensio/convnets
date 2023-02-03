@@ -1,0 +1,10 @@
+train: 
+  limit_train_batches: 100
+  epochs: 10
+
+dataloader:
+  num_workers: 10
+  
+log:
+  project: alexnet
+  name: test
