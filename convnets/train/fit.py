@@ -21,6 +21,8 @@ def fit(
     device="cpu", 
     rank=0,
     compile=False,
+    *args,
+    **kwargs
 ):
     if device == "cuda":
         device_type = "cuda"

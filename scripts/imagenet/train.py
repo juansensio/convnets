@@ -35,9 +35,9 @@ default_config = {
     },
     'train': {
         'epochs': 10,
-        'device': 'cuda',
         'after_epoch_log': False,
         'overfit': False,
+        'gpus': 1,
     },
 }
    
@@ -60,7 +60,7 @@ def train(rank, world_size, config):
         sampler = {
             'train': torch.utils.data.distributed.DistributedSampler(
                 dataset['train'],
-                shuffle=True if not config['datloader']['overfit'] else False,
+                shuffle=True if not config['train']['overfit'] else False,
                 num_replicas=world_size,
                 rank=rank
             ),
@@ -76,7 +76,7 @@ def train(rank, world_size, config):
     		batch_size=config['dataloader']['batch_size'], 
     		shuffle=True if world_size == 1 and not config['train']['overfit'] else False, 
     		num_workers=config['dataloader']['num_workers'],  
-    		pin_memory=True if config['train']['device'] == 'cuda' else False,
+    		pin_memory=True if config['train']['gpus'] > 0 else False,
             sampler=sampler['train'] if world_size > 1 else None,
             persistent_workers=True if world_size > 1 else False
     	),
@@ -84,7 +84,7 @@ def train(rank, world_size, config):
     		dataset['val'], 
     		batch_size=config['dataloader']['batch_size'], 
     		num_workers=config['dataloader']['num_workers'],
-    		pin_memory=True if config['train']['device'] == 'cuda' else False,
+    		pin_memory=True if config['train']['gpus'] > 0 else False,
             sampler=sampler['val'] if world_size > 1 else None,
             persistent_workers=True if world_size > 1 else False
     	),
@@ -101,6 +101,7 @@ def train(rank, world_size, config):
         optimizer, 
         criterion,
         metrics, 
+        device='cuda' if config['train']['gpus'] > 0 else 'cpu',
         rank=rank,
         after_val=lambda val_logs: scheduler.step(val_logs['t1err'][-1]) if scheduler is not None else None,
         on_epoch_end=lambda h,m,o: wandb.log({k: v[-1] for k, v in h.items()}) if rank == 0 and 'log' in config is not None else None,
@@ -113,7 +114,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process imagenet.')
     parser.add_argument('--config', help='yml config to override defaults', default=None)
     parser.add_argument('--experiment', help='yml config to override defaults', default=None)
-    parser.add_argument('--gpus', help='gpus', default=1, type=int)
     parser.add_argument('--debug', help='debug', default=False, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     if args.config:
@@ -131,7 +131,7 @@ if __name__ == '__main__':
         with open(path, 'r') as stream:
             loaded_config = yaml.safe_load(stream)
         deep_update(default_config, loaded_config)
-    world_size = args.gpus
+    world_size = default_config['train']['gpus']
     if world_size > 1:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'

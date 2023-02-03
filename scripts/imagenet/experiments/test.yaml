@@ -1,6 +1,7 @@
 train: 
   limit_train_batches: 100
   epochs: 10
+  gpus: 2
 
 dataloader:
   num_workers: 10
