@@ -63,7 +63,7 @@ def train(rank, world_size, config):
         sampler = {
             'train': torch.utils.data.distributed.DistributedSampler(
                 dataset['train'],
-                shuffle=True if not config['train']['overfit'] else False,
+                shuffle=True if not config['train']['overfit_batches'] else False,
                 num_replicas=world_size,
                 rank=rank
             ),
@@ -77,9 +77,9 @@ def train(rank, world_size, config):
     	'train': DataLoader(
     		dataset['train'], 
     		batch_size=config['dataloader']['batch_size'], 
-    		shuffle=True if world_size == 1 and not config['train']['overfit'] else False, 
+    		shuffle=True if world_size == 1 and not config['train']['overfit_batches'] else False, 
     		num_workers=config['dataloader']['num_workers'],  
-    		pin_memory=True if config['train']['gpus'] > 0 else False,
+    		pin_memory=True if config['train']['accelerator'] == 'gpu' else False,
             sampler=sampler['train'] if world_size > 1 else None,
             persistent_workers=True if world_size > 1 else False
     	),
@@ -87,7 +87,7 @@ def train(rank, world_size, config):
     		dataset['val'], 
     		batch_size=config['dataloader']['batch_size'], 
     		num_workers=config['dataloader']['num_workers'],
-    		pin_memory=True if config['train']['gpus'] > 0 else False,
+    		pin_memory=True if config['train']['accelerator'] == 'gpu' else False,
             sampler=sampler['val'] if world_size > 1 else None,
             persistent_workers=True if world_size > 1 else False
     	),
@@ -96,15 +96,15 @@ def train(rank, world_size, config):
     criterion = torch.nn.CrossEntropyLoss()
     scheduler = getattr(torch.optim.lr_scheduler, config['scheduler'])(optimizer, **config['scheduler_params']) if config['scheduler'] is not None else None
     metrics = {'t1err': error, 't5err': top5_error}
-    if rank == 0 and 'log' in config:
-        wandb.init(project=config['log']['project'], name=config['log']['name'], config=config)
+    if rank == 0 and 'logger' in config:
+        wandb.init(project=config['logger']['project'], name=config['logger']['name'], config=config)
     fit(
         model, 
         dataloader, 
         optimizer, 
         criterion,
         metrics, 
-        device='cuda' if config['train']['acceletaor'] == 'gpu' else 'cpu',
+        device='cuda' if config['train']['accelerator'] == 'gpu' else 'cpu',
         rank=rank,
         after_val=lambda val_logs: scheduler.step(val_logs['t1err'][-1]) if scheduler is not None else None,
         on_epoch_end=lambda h,m,o: wandb.log({k: v[-1] for k, v in h.items()}) if rank == 0 and 'log' in config is not None else None,
@@ -134,7 +134,7 @@ if __name__ == '__main__':
         with open(path, 'r') as stream:
             loaded_config = yaml.safe_load(stream)
         deep_update(default_config, loaded_config)
-    world_size = default_config['train']['gpus']
+    world_size = default_config['train']['devices']
     if world_size > 1:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'
