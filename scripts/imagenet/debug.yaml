@@ -1,7 +1,3 @@
 train:
-  overfit: 32
-  after_epoch_log: false
-  epochs: 100 
-
-dataloader: 
-  num_workers: 0
+  overfit_batches: 64
+  max_epochs: 100 

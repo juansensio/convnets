@@ -26,12 +26,16 @@ default_config = {
             'CenterCrop': {'height': 224, 'width': 224},
         },
         'num_workers': 0,
+        'pin_memory': False,
+        'persistent_workers': False,
     },
     'train': {
-        'epochs': 10,
-        'after_epoch_log': False,
-        'overfit': False,
-        'gpus': 1,
+        'max_epochs': 10,
+        'overfit_batches': False,
+        'accelerator': 'gpu',
+        'devices': 1,
+        'enable_checkpointing': False,
+        'logger': None
     },
 }
 
@@ -52,7 +56,7 @@ class DataModule(pl.LightningDataModule):
     def get_dataloader(self, ds, batch_size=None, shuffle=None):
         return DataLoader(
             ds,
-            batch_size=batch_size if batch_size is not None else self.batch_size,
+            batch_size=batch_size if batch_size is not None else self.config['batch_size'],
             shuffle=shuffle if shuffle is not None else True,
             num_workers=self.config['num_workers'],
             pin_memory=self.config['pin_memory'],
@@ -101,18 +105,19 @@ class Module(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = getattr(torch.optim, self.hparams.optimizer)(
             self.parameters(), **self.hparams['optimizer_params'])
-        if 'scheduler' in self.hparams:
+        if self.hparams['scheduler']:
             schedulers = [
                 getattr(torch.optim.lr_scheduler, scheduler)(
                     optimizer, **params)
                 for scheduler, params in self.hparams.scheduler.items()
             ]
             return [optimizer], schedulers
-        return 
+        return optimizer
 
 def train(config):
+    torch.set_float32_matmul_precision('high')
     pl.seed_everything(42, workers=True)
-    dm = DataModule(**config['datamodule'])
+    dm = DataModule(config['dataloader'])
     module = Module(config)
     config['train']['callbacks'] = []
     if config['train']['enable_checkpointing']:
@@ -134,14 +139,14 @@ def train(config):
         ]
     if config['train']['logger']:
         config['train']['logger'] = WandbLogger(
-            project=config['log']['project'],
-            name=config['log']['name'],
+            project=config['logger']['project'],
+            name=config['logger']['name'],
             config=config
         )
         if 'scheduler' in config and config['scheduler']:
             config['train']['callbacks'] += [
                 LearningRateMonitor(logging_interval='step')]
-    trainer = pl.Trainer(**config['trainer'])
+    trainer = pl.Trainer(**config['train'])
     trainer.fit(module, dm)
 
 if __name__ == '__main__':
