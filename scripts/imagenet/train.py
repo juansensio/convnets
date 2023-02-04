@@ -17,6 +17,7 @@ import yaml
 
 # TODO
 #   distributed metrics
+#   checkpointing
 
 default_config = {
     'model': 'Alexnet',
