@@ -35,7 +35,6 @@ default_config = {
         'accelerator': 'gpu',
         'devices': 1,
         'enable_checkpointing': False,
-        'logger': None
     },
 }
 
@@ -124,21 +123,21 @@ def train(config):
         config['train']['callbacks'] += [
             ModelCheckpoint(
                 dirpath='./checkpoints',
-                filename=f'{config["log"]["name"]}-{{val_metric:.5f}}-{{epoch}}',
-                monitor='val_metric',
+                filename=f'{config["logger"]["name"]}-{{val_t1e:.5f}}-{{epoch}}',
+                monitor='val_t1e',
                 mode='min',
                 save_top_k=1
             ),
             ModelCheckpoint(
                 dirpath='./checkpoints',
-                filename=f'{config["log"]["name"]}-{{epoch}}',
+                filename=f'{config["logger"]["name"]}-{{epoch}}',
                 monitor='epoch',
                 mode='max',
                 save_top_k=1
             )
         ]
-    if config['train']['logger']:
-        config['train']['logger'] = WandbLogger(
+    if 'logger' in config:
+        config['logger'] = WandbLogger(
             project=config['logger']['project'],
             name=config['logger']['name'],
             config=config

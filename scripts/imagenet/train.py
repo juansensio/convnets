@@ -43,6 +43,7 @@ default_config = {
 }
    
 def train(rank, world_size, config):
+    torch.set_float32_matmul_precision('high')
     seed_everything()
     if rank == 0:
         print(config)

@@ -18,4 +18,4 @@ dataloader:
     HorizontalFlip: {}
     RGBShift: {}
 train:
-  epochs: 90
+  max_epochs: 90

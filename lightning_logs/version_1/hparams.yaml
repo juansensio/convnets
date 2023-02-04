@@ -1,0 +1,21 @@
+dataloader:
+  batch_size: 64
+  num_workers: 0
+  path: /fastdata/imagenet256
+  persistent_workers: false
+  pin_memory: false
+  transforms:
+    CenterCrop:
+      height: 224
+      width: 224
+model: Alexnet
+optimizer: SGD
+optimizer_params:
+  lr: 0.01
+scheduler: null
+train:
+  accelerator: gpu
+  devices: 1
+  enable_checkpointing: false
+  max_epochs: 100
+  overfit_batches: 64
