@@ -11,3 +11,4 @@ checkpoints
 *.csv
 *.json
 wandb
+lightning_logs
