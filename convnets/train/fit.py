@@ -9,9 +9,9 @@ def fit(
     optimizer, 
     criterion, 
     metrics={'acc': accuracy},
-    epochs=20,
+    max_epochs=20,
     # debug
-    overfit=0,
+    overfit_batches=0,
     limit_train_batches=0,
     after_epoch_log=True,
     # callbacks
@@ -41,11 +41,11 @@ def fit(
         print(rank, "Compiling model ...") # it can takw a while...
         model = torch.compile(model)
     model.to(device)
-    mb = master_bar(range(1, epochs+1)) if rank == 0 else range(1, epochs+1)
+    mb = master_bar(range(1, max_epochs+1)) if rank == 0 else range(1, max_epochs+1)
     hist = {'epoch': [], 'loss': [], 'lr': []}
     for metric in metrics.keys():
         hist[metric] = []
-    if not overfit and 'val' in dataloader:
+    if not overfit_batches and 'val' in dataloader:
         hist['val_loss'] = []
         for metric in metrics.keys():
             hist['val_' + metric] = []
@@ -72,14 +72,14 @@ def fit(
             for metric in metrics.keys():
                 log += f" {metric} {np.mean(train_logs[metric]):.5f}"
             if rank == 0: mb.child.comment = log
-            if overfit and batch_ix > overfit:
+            if overfit_batches and batch_ix > overfit_batches:
                 break
             if limit_train_batches and batch_ix > limit_train_batches:
                 break
         hist['loss'].append(np.mean(train_logs['loss']))
         for metric in metrics.keys():
             hist[metric].append(np.mean(train_logs[metric]))
-        if not overfit and 'val' in dataloader:
+        if not overfit_batches and 'val' in dataloader:
             val_logs = {'loss': []}
             for metric in metrics.keys():
                 val_logs[metric] = []
@@ -111,6 +111,6 @@ def fit(
         hist['lr'].append(optimizer.param_groups[0]['lr'])
         if rank == 0: mb.main_bar.comment = log
         if after_epoch_log and rank == 0: 
-            mb.write(f"Epoch {epoch}/{epochs} " + log)
+            mb.write(f"Epoch {epoch}/{max_epochs} " + log)
         on_epoch_end(hist, model, optimizer)
     return hist

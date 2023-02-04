@@ -1,15 +1,12 @@
 train: 
-  limit_train_batches: 100
-  limit_val_batches: 100
   max_epochs: 10
-  devices: 2
+  devices: 1
   enable_checkpointing: True
 
 
 dataloader:
   num_workers: 10
   pin_memory: True
-  persistent_workers: True
   
 logger:
   project: alexnet

@@ -35,10 +35,11 @@ default_config = {
         'num_workers': 0,
     },
     'train': {
-        'epochs': 10,
+        'max_epochs': 10,
         'after_epoch_log': False,
-        'overfit': False,
-        'gpus': 1,
+        'overfit_batches': False,
+        'accelerator': 'gpu',
+        'devices': 1,
     },
 }
    
@@ -103,7 +104,7 @@ def train(rank, world_size, config):
         optimizer, 
         criterion,
         metrics, 
-        device='cuda' if config['train']['gpus'] > 0 else 'cpu',
+        device='cuda' if config['train']['acceletaor'] == 'gpu' else 'cpu',
         rank=rank,
         after_val=lambda val_logs: scheduler.step(val_logs['t1err'][-1]) if scheduler is not None else None,
         on_epoch_end=lambda h,m,o: wandb.log({k: v[-1] for k, v in h.items()}) if rank == 0 and 'log' in config is not None else None,
