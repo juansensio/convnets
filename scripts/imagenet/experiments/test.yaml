@@ -7,7 +7,3 @@ train:
 dataloader:
   num_workers: 10
   pin_memory: True
-  
-logger:
-  project: alexnet
-  name: test
