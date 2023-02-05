@@ -13,6 +13,7 @@ def fit(
     # debug
     overfit_batches=0,
     limit_train_batches=0,
+    limit_val_batches=0,
     after_epoch_log=True,
     # callbacks
     on_epoch_end=lambda h,m,o,e: None,
@@ -86,7 +87,7 @@ def fit(
             model.eval()
             with torch.no_grad():
                 pbar = progress_bar(dataloader['val'], parent=mb) if rank == 0 else dataloader['val']
-                for batch in pbar:
+                for batch_ix, batch in enumerate(pbar):
                     X, y = batch
                     X, y = X.to(device), y.to(device)
                     with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
@@ -100,6 +101,8 @@ def fit(
                         for metric in metrics.keys():
                             _log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
                         mb.child.comment = _log
+                    if limit_val_batches and batch_ix > limit_val_batches:
+                        break
             hist['val_loss'].append(np.mean(val_logs['loss']))
             for metric in metrics.keys():
                 hist['val_' + metric].append(np.mean(val_logs[metric]))

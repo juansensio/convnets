@@ -141,9 +141,8 @@ def train(config):
             name=config['logger']['name'],
             config=config
         )
-        if 'scheduler' in config and config['scheduler']:
-            config['train']['callbacks'] += [
-                LearningRateMonitor(logging_interval='step')]
+        if config['scheduler']:
+            config['train']['callbacks'] += [LearningRateMonitor(logging_interval='step')]
     trainer = pl.Trainer(**config['train'])
     trainer.fit(module, dm)
 

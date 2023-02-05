@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "convnets"
-version = "0.2.3"
+version = "0.2.4"
 description = "Convolutional Neural Networks and utilities for Computer Vision"
 authors = ["juansensio <sensio.juan@gmail.com>"]
 readme = "README.md"
