@@ -1,0 +1,11 @@
+train: 
+  devices: 1
+  enable_checkpointing: True
+
+dataloader:
+  num_workers: 10
+  pin_memory: True
+  
+logger:
+  project: alexnet
+  name: exp001
