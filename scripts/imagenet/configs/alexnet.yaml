@@ -4,10 +4,13 @@ optimizer_params:
   lr: 0.01
   momentum: 0.9
   weight_decay: 0.0005
-# scheduler: ReduceLROnPlateau
-# scheduler_params:
-#   patience: 1
-#   factor: 0.1
+scheduler: ReduceLROnPlateau
+scheduler_params:
+  patience: 1
+  factor: 0.1
+  threshold_mode: abs
+  threshold: 0.00001
+  verbose: true
 dataloader:
   path: /fastdata/imagenet256
   batch_size: 128

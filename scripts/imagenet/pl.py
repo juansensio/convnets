@@ -105,12 +105,11 @@ class Module(pl.LightningModule):
         optimizer = getattr(torch.optim, self.hparams.optimizer)(
             self.parameters(), **self.hparams['optimizer_params'])
         if self.hparams['scheduler']:
-            schedulers = [
-                getattr(torch.optim.lr_scheduler, scheduler)(
-                    optimizer, **params)
-                for scheduler, params in self.hparams.scheduler.items()
-            ]
-            return [optimizer], schedulers
+            return {
+                'optimizer': optimizer,
+                'lr_scheduler': getattr(torch.optim.lr_scheduler, self.hparams['scheduler'])(optimizer, **self.hparams['scheduler_params']),
+                'monitor': 'val_t1e'
+            }
         return optimizer
 
 def train(config):
