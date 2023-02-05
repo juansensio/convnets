@@ -46,3 +46,4 @@ class Alexnet(nn.Module):
         y = self.forward(x)                                                 # (10*B), N
         y = rearrange(y, '(n b) c -> n b c', b=B)                           # 10, B, N
         return y.mean(dim=0)                                                # B, N
+    # paper repots top-1 and top-5 test error rate of 40.7% and 18.2% en imagenet 2012 validation set
