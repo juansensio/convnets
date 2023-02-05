@@ -136,7 +136,7 @@ def train(config):
             )
         ]
     if 'logger' in config:
-        config['logger'] = WandbLogger(
+        config['train']['logger'] = WandbLogger(
             project=config['logger']['project'],
             name=config['logger']['name'],
             config=config

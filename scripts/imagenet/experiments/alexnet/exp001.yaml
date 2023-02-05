@@ -10,4 +10,4 @@ dataloader:
   
 logger:
   project: alexnet
-  name: test
+  name: exp001
