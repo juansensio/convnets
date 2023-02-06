@@ -8,7 +8,8 @@ scheduler: ReduceLROnPlateau
 scheduler_params:
   patience: 1
   factor: 0.1
-  threshold_mode: abs
+  threshold_mode: abs 
+  min_lr: 0.00001
   verbose: true
 dataloader:
   path: /fastdata/imagenet256
