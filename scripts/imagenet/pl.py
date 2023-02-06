@@ -117,6 +117,7 @@ def train(config):
     pl.seed_everything(42, workers=True)
     dm = DataModule(config['dataloader'])
     module = Module(config)
+    print(module.model)
     config['train']['callbacks'] = []
     if config['train']['enable_checkpointing']:
         config['train']['callbacks'] += [
