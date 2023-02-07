@@ -3,7 +3,6 @@ import torch
 import torchvision
 from einops import rearrange
 
-# only works for 224x224x3 inputs !
 
 class Alexnet(nn.Module):
     def __init__(self, config=None, **kwargs):
@@ -30,6 +29,7 @@ class Alexnet(nn.Module):
             nn.MaxPool2d(kernel_size=3, stride=2),
         ) 
         self.head = nn.Sequential(
+            nn.AdaptiveAvgPool2d(output_size=(7, 7)), # makes it work with any input size
             nn.Flatten(),
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True),

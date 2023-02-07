@@ -8,15 +8,15 @@ def fit(
     dataloader, 
     optimizer, 
     criterion, 
-    metrics={'acc': accuracy},
-    max_epochs=20,
+    metrics,
+    max_epochs,
     # debug
     overfit_batches=0,
     limit_train_batches=0,
     limit_val_batches=0,
     after_epoch_log=True,
     # callbacks
-    on_epoch_end=lambda h,m,o,e: None,
+    on_epoch_end=lambda h,m,o: None,
     after_val=lambda vl: None,
     # device
     device="cpu", 
