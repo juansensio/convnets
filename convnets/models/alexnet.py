@@ -3,11 +3,10 @@ import torch
 import torchvision
 from einops import rearrange
 
-
 class Alexnet(nn.Module):
-    def __init__(self, config=None, **kwargs):
+    def __init__(self, conf=None, **kwargs):
         super(Alexnet, self).__init__()
-        use_bn = config['batch_norm'] if config is not None and 'batch_norm' in config else False
+        use_bn = conf['batch_norm'] if conf is not None and 'batch_norm' in conf else False
         self.backbone = nn.Sequential(
             nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=2),
             nn.ReLU(inplace=True),

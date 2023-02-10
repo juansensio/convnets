@@ -9,57 +9,72 @@ from torch.nn import Identity as I
 
 @dataclass
 class VGGConfig:
-    vgg11 = [
-        {'repeat': 1, 'filters': 64},
-        {'repeat': 1, 'filters': 128},
-        {'repeat': 2, 'filters': 256},
-        {'repeat': 2, 'filters': 512},
-        {'repeat': 2, 'filters': 512},
-    ]
-    vgg13 = [
-        {'repeat': 2, 'filters': 64},
-        {'repeat': 2, 'filters': 128},
-        {'repeat': 2, 'filters': 256},
-        {'repeat': 2, 'filters': 512},
-        {'repeat': 2, 'filters': 512},
-    ]
-    vgg16 = [
-        {'repeat': 2, 'filters': 64},
-        {'repeat': 2, 'filters': 128},
-        {'repeat': 3, 'filters': 256},
-        {'repeat': 3, 'filters': 512},
-        {'repeat': 3, 'filters': 512},
-    ]
-    vgg19 = [
-        {'repeat': 2, 'filters': 64},
-        {'repeat': 2, 'filters': 128},
-        {'repeat': 4, 'filters': 256},
-        {'repeat': 4, 'filters': 512},
-        {'repeat': 4, 'filters': 512},
-    ]
-
-def vgg_block(r, f1, f2, bn=False):
-    return S(*[S(C(f1 if i == 0 else f2,f2,3,1,1),R(),BN(f2) if bn else I) for i in range(r)],M(2,2))
+    vgg11 = {
+        'd': 0.5, 
+        'bn': False, 
+        'l': [
+            {'r': 1, 'f': 64},
+            {'r': 1, 'f': 128},
+            {'r': 2, 'f': 256},
+            {'r': 2, 'f': 512},
+            {'r': 2, 'f': 512}
+        ]   
+    }        
+    vgg13 = {
+        'd': 0.5, 
+        'bn': False, 
+        'l': [
+            {'r': 2, 'f': 64},
+            {'r': 2, 'f': 128},
+            {'r': 2, 'f': 256},
+            {'r': 2, 'f': 512},
+            {'r': 2, 'f': 512},
+        ]
+    }
+    vgg16 = {
+        'd': 0.5, 
+        'bn': False, 
+        'l': [
+            {'r': 2, 'f': 64},
+            {'r': 2, 'f': 128},
+            {'r': 3, 'f': 256},
+            {'r': 3, 'f': 512},
+            {'r': 3, 'f': 512},
+        ]
+    }
+    vgg19 = {
+        'd': 0.5, 
+        'bn': False, 
+        'l': [
+            {'r': 2, 'f': 64},
+            {'r': 2, 'f': 128},
+            {'r': 4, 'f': 256},
+            {'r': 4, 'f': 512},
+            {'r': 4, 'f': 512},
+        ]
+    }
 
 class VGG(nn.Module):
-    def __init__(self, conf, dropout=0.5, batch_norm=False, features_only=False):
+    def __init__(self, conf, features_only=False, **kwargs):
         super(VGG, self).__init__()
+        block = lambda r,f1,f2,bn=False: S(*[S(C(f1 if i == 0 else f2,f2,3,1,1),R(),BN(f2) if bn else I) for i in range(r)],M(2,2))
         self.backbone = nn.ModuleList([
-            vgg_block(c['repeat'], conf[i-1]['filters'] if i > 0 else 3, c['filters'], bn=batch_norm) 
-            for i, c in enumerate(conf)
+            block(c['r'], conf['l'][i-1]['f'] if i > 0 else 3, c['f'], bn=conf['bn']) 
+            for i, c in enumerate(conf['l'])
         ])
-        self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(output_size=(7, 7)), # makes it work with any input size
-            nn.Flatten(),
-            nn.Linear(512*7*7, 4096),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=dropout),
-            nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=dropout),
-            nn.Linear(4096, 1000),
-        )
         self.features_only = features_only
+        if not features_only:
+            self.head = nn.Sequential(
+                nn.AdaptiveAvgPool2d(output_size=(7, 7)), # makes it work with any input size
+                nn.Flatten(),
+                nn.Linear(512*7*7, 4096),
+                nn.ReLU(inplace=True),
+                nn.Dropout(p=conf['d']),
+                nn.Linear(4096, 4096),
+                nn.ReLU(inplace=True),
+                nn.Dropout(p=conf['d']),
+                nn.Linear(4096, 1000),
+            )
 
     def forward(self, x):
         features = []
