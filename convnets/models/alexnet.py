@@ -1,56 +1,54 @@
 import torch.nn as nn 
-import torch 
-import torchvision
-from einops import rearrange
+from torch.nn import Sequential as S 
+from torch.nn import Conv2d as C
+from torch.nn import ReLU as R 
+from torch.nn import MaxPool2d as M
+from torch.nn import BatchNorm2d as BN
+from torch.nn import BatchNorm1d as BN1
+from torch.nn import Identity as I
+from torch.nn import AdaptiveAvgPool2d as Ap
+from torch.nn import Flatten as F
+from torch.nn import Linear as L
+from torch.nn import ReLU as R 
+from torch.nn import Dropout as D
 
 class Alexnet(nn.Module):
-    def __init__(self, conf=None, **kwargs):
+    def __init__(self, conf=None):
         super(Alexnet, self).__init__()
-        use_bn = conf['batch_norm'] if conf is not None and 'batch_norm' in conf else False
-        self.backbone = nn.Sequential(
-            nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=2),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(96) if use_bn else nn.Identity(),
-            nn.MaxPool2d(kernel_size=3, stride=2),
-            nn.Conv2d(96, 256, kernel_size=5, padding=2),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(256) if use_bn else nn.Identity(),
-            nn.MaxPool2d(kernel_size=3, stride=2),
-            nn.Conv2d(256, 384, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(384) if use_bn else nn.Identity(),
-            nn.Conv2d(384, 384, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(384) if use_bn else nn.Identity(),
-            nn.Conv2d(384, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(256) if use_bn else nn.Identity(),
-            nn.MaxPool2d(kernel_size=3, stride=2),
+        use_bn = conf['bn'] if conf is not None and 'bn' in conf else False
+        self.backbone = S(
+            C(3, 96, 11, 4, 2),
+            R(inplace=True),
+            BN(96) if use_bn else I(),
+            M(3, stride=2),
+            C(96, 256, 5, 1, 2),
+            R(inplace=True),
+            BN(256) if use_bn else I(),
+            M(3, 2),
+            C(256, 384, 3, 1, 1),
+            R(inplace=True),
+            BN(384) if use_bn else I(),
+            C(384, 384, 3, 1, 1),
+            R(inplace=True),
+            BN(384) if use_bn else I(),
+            C(384, 256, 3, 1, 1),
+            R(inplace=True),
+            BN(256) if use_bn else I(),
+            M(3, stride=2),
         ) 
-        self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(output_size=(7, 7)), # makes it work with any input size
-            nn.Flatten(),
-            nn.Linear(256 * 6 * 6, 4096),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm1d(4096) if use_bn else nn.Identity(),
-            nn.Dropout(p=0.5),
-            nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm1d(4096) if use_bn else nn.Identity(),
-            nn.Dropout(p=0.5),
-            nn.Linear(4096, 1000),
+        self.head = S(
+            Ap((7, 7)), # makes it work with any input size
+            F(),
+            L(256 * 6 * 6, 4096),
+            R(inplace=True),
+            BN1(4096) if use_bn else I(),
+            D(p=0.5),
+            L(4096, 4096),
+            R(inplace=True),
+            BN1(4096) if use_bn else I(),
+            D(p=0.5),
+            L(4096, 1000),
         )
 
     def forward(self, x):
         return self.head(self.backbone(x))
-    
-    def tta(self, x):
-        B = x.shape[0]                                                      # B, C, H, W    
-        crops = torch.stack(torchvision.transforms.FiveCrop(224)(x))        # 5, B, C, H, W
-        flips = torch.stack([torch.flip(crop, (-1,)) for crop in crops])    # 5, B, C, H, W
-        x = torch.cat([crops, flips])                                       # 10, B, C, H, W
-        x = rearrange(x, 'n b c h w -> (n b) c h w')                        # (10*B), C, H, W
-        y = self.forward(x)                                                 # (10*B), N
-        y = rearrange(y, '(n b) c -> n b c', b=B)                           # 10, B, N
-        return y.mean(dim=0)                                                # B, N
-    # paper repots top-1 and top-5 test error rate of 40.7% and 18.2% en imagenet 2012 validation set
