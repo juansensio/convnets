@@ -37,7 +37,7 @@ class Alexnet(nn.Module):
             M(3, stride=2),
         ) 
         self.head = S(
-            Ap((7, 7)), # makes it work with any input size
+            Ap((6, 6)), # makes it work with any input size
             F(),
             L(256 * 6 * 6, 4096),
             R(inplace=True),

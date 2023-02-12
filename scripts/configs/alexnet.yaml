@@ -12,17 +12,31 @@ scheduler_params:
   min_lr: 0.00001
   verbose: true
 dataloader:
-  path: /fastdata/imagenet256
-  batch_size: 128
-  train_trans:
-    RandomCrop:
-      width: 224
-      height: 224
-    HorizontalFlip: {}
-    RGBShift: {}
-  val_trans:
-    CenterCrop:
-      width: 224
-      height: 224
+  dataset: ImageNet
+  train:
+    path: /fastdata/imagenet256
+    batch_size: 128
+    num_workers: 10
+    mode: train
+    trans:
+      RandomCrop:
+        width: 224
+        height: 224
+      HorizontalFlip: {}
+      RGBShift: {}
+      Normalize: {}
+  val:
+    path: /fastdata/imagenet256
+    batch_size: 128
+    num_workers: 10
+    mode: val
+    trans:
+      CenterCrop:
+        width: 224
+        height: 224
+      Normalize: {}
 train:
   max_epochs: 90
+metrics:
+  error: t1err
+  top5_error: t5err

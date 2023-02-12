@@ -39,13 +39,13 @@ class Config(BaseModel):
     logger: dict = None
     train: TrainConfig
 
-def train(config: Config, rank: int = 0, world_size: int = 1):
+def train(rank: int, world_size: int, config: Config):
     torch.set_float32_matmul_precision('high')
     seed_everything()
     if rank == 0:
         print(config)
-    if config.conf is None: 
-        assert config.variant is not None, 'should pass variant or conf'
+    if config.conf is None and config.variant is not None: 
+        # assert config.variant is not None, 'should pass variant or conf'
         variants = getattr(models, config.model+'Config')
         config.conf = getattr(variants, config.variant)
     model = getattr(models, config.model)(config.conf, **config.model_params)
@@ -118,6 +118,6 @@ if __name__ == '__main__':
     if world_size > 1:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'
-        mp.spawn(train, nprocs=world_size, args=(config, world_size))
+        mp.spawn(train, nprocs=world_size, args=(world_size, config))
     else:
-        train(config)
+        train(0, 1, config)

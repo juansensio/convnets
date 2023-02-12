@@ -123,7 +123,7 @@ def compute_stats(images, workers=None):
     return np.array(mean).mean(axis=0), np.array(std).mean(axis=0)
 
 class ImageNet(Dataset):
-    def __init__(self, path, mode, trans=None, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    def __init__(self, path, mode, trans=None, **kwargs):
         assert mode in ['train', 'val', 'test'], 'mode must be train, val or test'
         path = Path(path)
         self.labels = None
@@ -144,23 +144,16 @@ class ImageNet(Dataset):
                 assert len(images) == 50000
             self.images, self.labels = images, labels
         self.trans = trans 
-        self.mean = np.array(mean).astype(np.float32)
-        self.std = np.array(std).astype(np.float32)
 
     def __len__(self):
         return len(self.images)
     
     def __getitem__(self, ix):
-        # read image
         im = io.imread(self.images[ix])
-        # apply transformations on uint8 RGB images
         if self.trans is not None:
             im = self.trans(image=im)['image']
-        # normalize
         im = im.astype(np.float32) / 255.
-        im = (im - self.mean) / self.std
         im = rearrange(im, 'h w c -> c h w')
-        # read label if available
         if self.labels is not None:
             return im, self.labels[ix]
         return im

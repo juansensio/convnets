@@ -1,13 +1,43 @@
-train: 
-  devices: 1
-  enable_checkpointing: True
-  limit_train_batches: 1000
-  limit_val_batches: 100
-
+model: Alexnet
+optimizer: SGD
+optimizer_params:
+  lr: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+scheduler: ReduceLROnPlateau
+scheduler_params:
+  patience: 1
+  factor: 0.1
+  threshold_mode: abs 
+  min_lr: 0.00001
+  verbose: true
 dataloader:
-  num_workers: 10
-  pin_memory: True
-  
-logger:
-  project: alexnet
-  name: exp001
+  dataset: ImageNet
+  train:
+    path: /fastdata/imagenet256
+    batch_size: 128
+    num_workers: 10
+    mode: train
+    trans:
+      RandomCrop:
+        width: 224
+        height: 224
+      HorizontalFlip: {}
+      RGBShift: {}
+      Normalize: {}
+  val:
+    path: /fastdata/imagenet256
+    batch_size: 128
+    num_workers: 10
+    mode: val
+    trans:
+      CenterCrop:
+        width: 224
+        height: 224
+      Normalize: {}
+train:
+  max_epochs: 90
+  devices: 2
+metrics:
+  error: t1err
+  top5_error: t5err
