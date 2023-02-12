@@ -1,3 +1,4 @@
+from .mnist import MNIST
 from .eurosat import EuroSAT
 from .seco import SeCo
 from .imagenet import ImageNet 

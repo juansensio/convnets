@@ -1,7 +1,6 @@
 import torch
 from fastprogress.fastprogress import master_bar, progress_bar
 import numpy as np
-from ..metrics import accuracy
 
 def fit(
     model, 
@@ -80,7 +79,7 @@ def fit(
         hist['loss'].append(np.mean(train_logs['loss']))
         for metric in metrics.keys():
             hist[metric].append(np.mean(train_logs[metric]))
-        if not overfit_batches and 'val' in dataloader:
+        if not overfit_batches and 'val' in dataloader and dataloader['val'] is not None:
             val_logs = {'loss': []}
             for metric in metrics.keys():
                 val_logs[metric] = []

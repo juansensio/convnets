@@ -1,9 +1,0 @@
-train: 
-  devices: 1
-  enable_checkpointing: True
-  limit_train_batches: 1000
-  limit_val_batches: 100
-
-dataloader:
-  num_workers: 10
-  pin_memory: True

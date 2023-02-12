@@ -1,0 +1,25 @@
+model: LeNet
+variant: lenet5
+optimizer: Adam
+dataloader:
+  dataset: MNIST
+  train:
+    path: data
+    train: True
+    batch_size: 256
+    trans:
+      PadIfNeeded:
+        min_height: 32
+        min_width: 32
+  val:
+    path: data
+    train: False
+    batch_size: 256
+    trans:
+      PadIfNeeded:
+        min_height: 32
+        min_width: 32
+train:
+  max_epochs: 20
+metrics:
+  error: error
