@@ -13,6 +13,7 @@ import pandas as pd
 from skimage import io
 import numpy as np
 from einops import rearrange
+import shutil
 
 # resize image by keeping the aspect ratio and cropping the center
 def resize_and_crop(path, size=256):
@@ -30,7 +31,6 @@ def resize_and_crop(path, size=256):
 # preprocess a single image and save the result
 def preprocess(args):
     dst_path, mode, path, size, cls = args
-    img = resize_and_crop(path, size)
     img_name = path.split('/')[-1]
     if cls is None:
         dst_folder = f'{dst_path}/{mode}'
@@ -38,13 +38,18 @@ def preprocess(args):
         dst_folder = f'{dst_path}/{mode}/{cls}'
     os.makedirs(dst_folder, exist_ok=True)
     new_path = f'{dst_folder}/{img_name}'
-    img.save(new_path)
+    if size is None: 
+        # just copy the original image
+        shutil.copyfile(path, new_path)
+    else:
+        img = resize_and_crop(path, size)
+        img.save(new_path)
     return new_path
 
 # this function will process the entire dataset, resizing and croping the images and generating the output folders for training
 # the datasets is supposed to be downloaded from https://www.kaggle.com/competitions/imagenet-object-localization-challenge/data
 
-def process(base_path = 'data/ILSVRC', dst_path = 'data/imagenet256', size=256, workers=None):
+def process(base_path = 'data/ILSVRC', dst_path = 'data/imagenet256', size=None, workers=None):
     # this is where the dataset is supposed to be
     path = f'{base_path}/Data/CLS-LOC/'
     classes = sorted(os.listdir(f'{path}/train'))
@@ -164,7 +169,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process imagenet.')
     parser.add_argument('--base-path', help='Folder with the original imagenet dataset')
     parser.add_argument('--dst-path', help='Folder where the processed dataset will be saved')
-    parser.add_argument('--size', help='Size of the images', default=256)
+    parser.add_argument('--size', help='Size of the images', default=None) # 
     parser.add_argument('--workers', help='Number of workers to use', default=None)
     args = parser.parse_args()
     process(
