@@ -29,9 +29,6 @@ default_config = {
     'dataloader': {
         'path': '/fastdata/imagenet256',
         'batch_size': 64,
-        'transforms': {
-            'CenterCrop': {'height': 224, 'width': 224},
-        },
         'num_workers': 0,
     },
     'train': {
@@ -42,19 +39,30 @@ default_config = {
         'devices': 1,
     },
 }
+
+def setup_trans(trans):
+    _trans = []
+    for t, t_params in trans.items():
+        if t == 'SmallestMaxSize' or t == 'LongestMaxSize':
+            if 'type' in t_params and t_params['type'] == 'range':
+                t_params['max_size'] = list(range(t_params['max_size'][0], t_params['max_size'][1]+1))
+                del t_params['type']
+        _trans.append(getattr(A, t)(**t_params))
+    return A.Compose(_trans)
    
 def train(rank, world_size, config):
     torch.set_float32_matmul_precision('high')
     seed_everything()
     if rank == 0:
         print(config)
-    model = getattr(models, config['model'])(config)
-    trans = A.Compose([
-        getattr(A, t)(**t_params) for t, t_params in config['dataloader']['transforms'].items()
-    ]) if config['dataloader']['transforms'] is not None else None
+    if not 'conf' in config or config['conf'] is None: 
+        assert 'variant' in config, 'should pass variant or conf'
+        variants = getattr(models, config['model']+'Config')
+        config['conf'] = getattr(variants, config['variant'])
+    model = getattr(models, config['model'])(**config)
     dataset = {
-        'train': ImageNet(config['dataloader']['path'], 'train', trans=trans),
-        'val': ImageNet(config['dataloader']['path'], 'val', trans=A.CenterCrop(224, 224)) # for now...
+        'train': ImageNet(config['dataloader']['path'], 'train', trans=setup_trans(config['dataloader']['train_trans']) if config['dataloader']['train_trans'] is not None else None),
+        'val': ImageNet(config['dataloader']['path'], 'val', trans=setup_trans(config['dataloader']['val_trans']) if config['dataloader']['val_trans'] is not None else None)
     }
     if world_size > 1:
         dist.init_process_group("nccl", init_method='env://', rank=rank, world_size=world_size)

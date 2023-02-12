@@ -22,9 +22,6 @@ default_config = {
     'dataloader': {
         'path': '/fastdata/imagenet256',
         'batch_size': 64,
-        'transforms': {
-            'CenterCrop': {'height': 224, 'width': 224},
-        },
         'num_workers': 0,
         'pin_memory': False,
         'persistent_workers': False,
@@ -43,13 +40,20 @@ class DataModule(pl.LightningDataModule):
         super().__init__()
         self.config = config
 
+    def setup_trans(self, trans):
+        _trans = []
+        for t, t_params in trans.items():
+            if t == 'SmallestMaxSize' or t == 'LongestMaxSize':
+                if 'type' in t_params and t_params['type'] == 'range':
+                    t_params['max_size'] = list(range(t_params['max_size'][0], t_params['max_size'][1]+1))
+                    del t_params['type']
+            _trans.append(getattr(A, t)(**t_params))
+        return A.Compose(_trans)
+    
     def setup(self, stage=None):
-        trans = A.Compose([
-            getattr(A, t)(**t_params) for t, t_params in self.config['transforms'].items()
-        ]) if self.config['transforms'] is not None else None
         self.dataset = {
-            'train': ImageNet(self.config['path'], 'train', trans=trans),
-            'val': ImageNet(self.config['path'], 'val', trans=A.CenterCrop(224, 224)) # for now...
+            'train': ImageNet(self.config['path'], 'train', trans=self.setup_trans(self.config['train_trans']) if self.config['train_trans'] is not None else None),
+            'val': ImageNet(self.config['path'], 'val', trans=self.setup_trans(self.config['val_trans']) if self.config['val_trans'] is not None else None) 
         }
 
     def get_dataloader(self, ds, batch_size=None, shuffle=None):
@@ -71,8 +75,12 @@ class DataModule(pl.LightningDataModule):
 class Module(pl.LightningModule):
     def __init__(self, config=None):
         super().__init__()
-        self.save_hyperparameters(config)
-        self.model = getattr(models, config['model'])(config) if config is not None else None
+        self.save_hyperparameters(config) 
+        if not 'conf' in config or config['conf'] is None: 
+            assert 'variant' in config, 'should pass variant or conf'
+            variants = getattr(models, config['model']+'Config')
+            config['conf'] = getattr(variants, config['variant'])
+        self.model = getattr(models, config['model'])(**config) if config is not None else None
         self.loss = torch.nn.CrossEntropyLoss()
         self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=1000)
         self.top5acc = torchmetrics.Accuracy(task="multiclass", num_classes=1000, top_k=5)

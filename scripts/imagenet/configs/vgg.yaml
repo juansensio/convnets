@@ -12,11 +12,15 @@ scheduler_params:
 dataloader:
   path: /fastdata/imagenet256
   batch_size: 256
-  transforms:
+  train_trans:
     RandomCrop:
       width: 224
       height: 224
     HorizontalFlip:
     RGBShift:
+  val_trans:
+    CenterCrop:
+      width: 224
+      height: 224
 train:
   epochs: 74

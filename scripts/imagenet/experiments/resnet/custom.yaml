@@ -1,0 +1,18 @@
+conf:
+  b: True
+  l:
+   - r: 2
+     f: 64
+  #  - r: 2
+  #    f: 128
+  #  - r: 2
+  #    f: 256
+   - r: 2
+     f: 512 
+    
+train: 
+  devices: 1
+
+# dataloader:
+#   batch_size: 128
+#   accumulate_grad_batches: 2

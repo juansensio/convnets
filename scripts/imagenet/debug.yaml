@@ -1,3 +1,19 @@
 train:
   overfit_batches: 64
   max_epochs: 100 
+
+optimizer_params:
+  lr: 0.01
+
+dataloader:
+  path: /fastdata/imagenet256
+  batch_size: 64
+  num_workers: 0
+  train_trans:
+    CenterCrop:
+      width: 224
+      height: 224
+  val_trans:
+    CenterCrop:
+      width: 224
+      height: 224

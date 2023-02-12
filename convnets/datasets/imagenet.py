@@ -40,10 +40,11 @@ def preprocess(args):
     new_path = f'{dst_folder}/{img_name}'
     if size is None: 
         # just copy the original image
-        shutil.copyfile(path, new_path)
+        # shutil.copyfile(path, new_path) # cannot copy because some image are not RGB (we could convert them afterwards but better here for performance)
+        img = Image.open(path).convert('RGB') # some images are RGBA
     else:
         img = resize_and_crop(path, size)
-        img.save(new_path)
+    img.save(new_path)
     return new_path
 
 # this function will process the entire dataset, resizing and croping the images and generating the output folders for training
