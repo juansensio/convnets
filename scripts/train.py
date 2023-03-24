@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from convnets.train.utils import setup_trans
 
 # TODO
-#   distributed metrics
+#   distributed metrics: torch.distributed.all_reduce(metrics) ??
 #   checkpointing
 
 class TrainConfig(BaseModel):
