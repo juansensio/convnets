@@ -23,6 +23,8 @@ class TrainConfig(BaseModel):
     devices: int = 1
     strategy: str = 'auto'
     precision: str = 'bf16'
+    limit_train_batches: int = 0
+    limit_val_batches: int = 0
 
 class Config(BaseModel):
     model: str
@@ -73,7 +75,7 @@ def train(config: Config):
         def after_val(self, val_logs):
             scheduler.step(val_logs['t1err'][-1])
         def after_epoch(self, hist):
-            if fabric.global_rank == 0 and 'log' in config is not None:
+            if fabric.global_rank == 0 and config.logger is not None:
                 wandb.log({k: v[-1] for k, v in hist.items()})
     torch.set_float32_matmul_precision('high')
     fabric = L.Fabric(

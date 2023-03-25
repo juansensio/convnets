@@ -37,7 +37,12 @@ dataloader:
       Normalize: {}
 train:
   max_epochs: 90
-  devices: 2
+  devices: 1
+  limit_train_batches: 100
+  limit_val_batches: 100
 metrics:
   error: t1err
   top5_error: t5err
+logger:
+  project: imagenet
+  name: alexnet001
