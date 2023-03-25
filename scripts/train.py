@@ -72,6 +72,9 @@ def train(config: Config):
     criterion = torch.nn.CrossEntropyLoss()
     scheduler = getattr(torch.optim.lr_scheduler, config.scheduler)(optimizer, **config.scheduler_params) if config.scheduler is not None else None
     class Callbacks:
+        def before_start(self):
+            if fabric.global_rank == 0 and config.logger is not None:
+                wandb.init(project=config.logger['project'], name=config.logger['name'], config=config)
         def after_val(self, val_logs):
             scheduler.step(val_logs['t1err'][-1])
         def after_epoch(self, hist):
@@ -85,8 +88,6 @@ def train(config: Config):
         precision=config.train.precision,
         callbacks=[Callbacks()]
     )
-    if fabric.global_rank == 0 and config.logger is not None:
-        wandb.init(project=config.logger['project'], name=config.logger['name'], config=config)
     fit(
         model, 
         dataloader, 

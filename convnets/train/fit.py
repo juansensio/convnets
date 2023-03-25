@@ -19,7 +19,6 @@ def fit(
     overfit_batches=0,
     limit_train_batches=0,
     limit_val_batches=0,
-    after_epoch_log=True,
     *args,
     **kwargs
 ):
@@ -45,6 +44,7 @@ def fit(
         for metric in metrics.keys():
             hist['val_' + metric] = []
     model, optimizer = fabric.setup(model, optimizer)
+    fabric.call('before_start')
     mb = master_bar(range(1, max_epochs+1)) if fabric.global_rank == 0 else range(1, max_epochs+1)
     for epoch in mb:
     # for epoch in range(1, max_epochs+1):
