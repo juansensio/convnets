@@ -46,6 +46,6 @@ train:
 metrics:
   error: t1err
   top5_error: t5err
-# logger:
-#   project: imagenet
-#   name: resnet001
+logger:
+  project: imagenet
+  name: resnet001
