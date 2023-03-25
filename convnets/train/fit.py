@@ -1,5 +1,6 @@
 import torch
-from tqdm import tqdm
+# from rich.progress import track
+from fastprogress.fastprogress import master_bar, progress_bar
 import numpy as np
 import lightning as L
 
@@ -12,7 +13,7 @@ def fit(
     criterion, 
     metrics,
     max_epochs,
-    compile=False,
+    compile=True,
     fabric=None,
     # debug
     overfit_batches=0,
@@ -22,7 +23,7 @@ def fit(
     *args,
     **kwargs
 ):
-    fabric = L.Fabric(accelerator="auto", devices=1) if fabric is None else fabric
+    fabric = L.Fabric(accelerator="gpu", devices=1, precision='bf16-mixed') if fabric is None else fabric
     fabric.launch()
     # count parameters
     if fabric.global_rank == 0:
@@ -32,7 +33,7 @@ def fit(
         # torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
         # torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
         # torch.set_float32_matmul_precision('high')
-        print(fabric.global_rank, "Compiling model ...") # it can takw a while...
+        print("Compiling model ...") # it can takw a while...
         model = torch.compile(model)
     hist = {'epoch': [], 'loss': [], 'lr': []}
     for metric in metrics.keys():
@@ -44,14 +45,18 @@ def fit(
         for metric in metrics.keys():
             hist['val_' + metric] = []
     model, optimizer = fabric.setup(model, optimizer)
-    for epoch in range(1, max_epochs+1):
+    mb = master_bar(range(1, max_epochs+1)) if fabric.global_rank == 0 else range(1, max_epochs+1)
+    for epoch in mb:
+    # for epoch in range(1, max_epochs+1):
         model.train()
         train_logs = {'loss': []}
         for metric in metrics.keys():
             train_logs[metric] = []
         hist['epoch'].append(epoch)
-        pbar = tqdm(dataloader['train'])
+        # pbar = tqdm(dataloader['train'])
+        pbar = progress_bar(dataloader['train'], parent=mb) if fabric.global_rank == 0 else dataloader['train']
         for batch_ix, batch in enumerate(pbar):
+        # for batch_ix, batch in track(enumerate(dataloader['train']), total=len(dataloader['train']), description=f"Epoch {epoch}/{max_epochs}"):
             X, y = batch
             optimizer.zero_grad()
             y_hat = model(X)
@@ -62,10 +67,10 @@ def fit(
             train_logs['loss'].append(loss.item())
             for metric in metrics.keys():
                 train_logs[metric].append(metrics[metric](y_hat, y).item())
-            log = f"Epoch {epoch}/{max_epochs} loss {np.mean(train_logs['loss']):.5f}"
+            log = f"loss {np.mean(train_logs['loss']):.5f}"
             for metric in metrics.keys():
                 log += f" {metric} {np.mean(train_logs[metric]):.5f}"
-            if fabric.global_rank == 0: pbar.set_description(log)
+            if fabric.global_rank == 0: mb.child.comment = log
             if overfit_batches and batch_ix > overfit_batches:
                 break
             if limit_train_batches and batch_ix > limit_train_batches:
@@ -79,7 +84,7 @@ def fit(
                 val_logs[metric] = []
             model.eval()
             with torch.no_grad():
-                pbar = tqdm(dataloader['val'])
+                pbar = progress_bar(dataloader['val'], parent=mb) if fabric.global_rank == 0 else dataloader['val']
                 for batch_ix, batch in enumerate(pbar):
                     X, y = batch
                     y_hat = model(X)
@@ -91,7 +96,7 @@ def fit(
                         _log = f"val_loss {np.mean(val_logs['loss']):.5f}"
                         for metric in metrics.keys():
                             _log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
-                        pbar.set_description(_log)
+                        mb.child.comment = _log
                     if limit_val_batches and batch_ix > limit_val_batches:
                         break
             hist['val_loss'].append(np.mean(val_logs['loss']))
@@ -101,8 +106,11 @@ def fit(
                 log += f" val_loss {np.mean(val_logs['loss']):.5f}"
                 for metric in metrics.keys():
                     log += f" val_{metric} {np.mean(val_logs[metric]):.5f}"
-            # after_val(val_logs)
+            fabric.call("after_val", val_logs=val_logs)
         hist['lr'].append(optimizer.param_groups[0]['lr'])
+        if fabric.global_rank == 0:
+            mb.main_bar.comment = log
+            mb.write(f"Epoch {epoch}/{max_epochs} " + log)
         # fabric.log_dict({k: v[-1] for k, v in hist.items()})
-        # on_epoch_end(hist, model, optimizer)
+        fabric.call("after_epoch", hist=hist)
     return hist
