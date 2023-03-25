@@ -34,3 +34,6 @@ dataloader:
       height: 224
 train:
   max_epochs: 90
+metrics:
+  error: t1err
+  top5_error: t5err

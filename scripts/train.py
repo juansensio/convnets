@@ -76,10 +76,12 @@ def train(config: Config):
             if fabric.global_rank == 0 and config.logger is not None:
                 wandb.init(project=config.logger['project'], name=config.logger['name'], config=config)
         def after_val(self, val_logs):
-            scheduler.step(val_logs['t1err'][-1])
+            t1err = fabric.all_gather(val_logs['t1err'][-1])
+            scheduler.step(t1err.mean().item())
         def after_epoch(self, hist):
+            gathered_hist = fabric.all_gather(hist)
             if fabric.global_rank == 0 and config.logger is not None:
-                wandb.log({k: v[-1] for k, v in hist.items()})
+                wandb.log({k: v[-1].mean().item() for k, v in gathered_hist.items()})
     torch.set_float32_matmul_precision('high')
     fabric = L.Fabric(
         accelerator=config.train.accelerator, 
