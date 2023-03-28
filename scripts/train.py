@@ -89,14 +89,16 @@ def train(config: Config):
             gathered_hist = fabric.all_gather(hist)
             # scheduler
             val_t1err = gathered_hist['val_t1err'][-1].float().mean().item()
-            print("ei", val_t1err)
             scheduler.step(val_t1err)
             # checkpoints
             if fabric.global_rank == 0 and self.ckpt_folder is not None:
-                ckpt_name = self.ckpt1_name.format(epoch=f"{hist['epoch'][-1]:03d}")
+                current_epoch = hist['epoch'][-1]
+                if current_epoch > 1:
+                    os.remove(os.path.join(self.ckpt_folder, self.ckpt1_name.format(epoch=f"{current_epoch-1:03d}")))
+                ckpt_name = self.ckpt1_name.format(epoch=f"{current_epoch:03d}")
                 ckpt_path = os.path.join(self.ckpt_folder, ckpt_name)
                 fabric.save(ckpt_path, {
-                    'epoch': hist['epoch'][-1],
+                    'epoch': current_epoch,
                     'model': model,
                     'optimizer': optimizer,
                     'scheduler': scheduler,
@@ -105,10 +107,10 @@ def train(config: Config):
                     self.best_metric = val_t1err    
                     if self.previos_ckpt is not None:
                         os.remove(self.previos_ckpt)
-                    ckpt_name = self.ckpt2_name.format(epoch=f"{hist['epoch'][-1]:03d}", val_t1_err=f'{val_t1err:.5f}')
+                    ckpt_name = self.ckpt2_name.format(epoch=f"{current_epoch:03d}", val_t1_err=f'{val_t1err:.5f}')
                     ckpt_path = os.path.join(self.ckpt_folder, ckpt_name)
                     fabric.save(ckpt_path, {
-                        'epoch': hist['epoch'][-1],
+                        'epoch': current_epoch,
                         'model': model,
                         'optimizer': optimizer,
                         'scheduler': scheduler,
