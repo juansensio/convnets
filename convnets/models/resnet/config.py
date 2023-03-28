@@ -27,7 +27,7 @@ class ResNetConfig:
             {'r': 6, 'f': 256},
             {'r': 3, 'f': 512}
         ], 
-        'b': False
+        'b': True
     }
     r101 = {
         'l': [
@@ -36,7 +36,7 @@ class ResNetConfig:
             {'r': 23, 'f': 256},
             {'r': 3, 'f': 512}
         ], 
-        'b': False
+        'b': True
     }
     r152 = {
         'l': [
@@ -45,5 +45,5 @@ class ResNetConfig:
             {'r': 236, 'f': 256},
             {'r': 3, 'f': 512}
         ], 
-        'b': False
+        'b': True
     }

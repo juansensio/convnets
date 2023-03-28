@@ -11,10 +11,7 @@ import yaml
 from pydantic import BaseModel
 from convnets.train.utils import setup_trans
 import lightning as L
-
-# TODO
-#   distributed metrics: torch.distributed.all_reduce(metrics) ??
-#   checkpointing
+import os
 
 class TrainConfig(BaseModel):
     max_epochs: int = 10
@@ -25,6 +22,7 @@ class TrainConfig(BaseModel):
     precision: str = 'bf16'
     limit_train_batches: int = 0
     limit_val_batches: int = 0
+    compile: bool = True
 
 class Config(BaseModel):
     model: str
@@ -39,6 +37,7 @@ class Config(BaseModel):
     dataloader: dict = {}
     logger: dict = None
     train: TrainConfig
+    ckpt_folder: str = None
 
 def train(config: Config):
     seed_everything()
@@ -72,16 +71,52 @@ def train(config: Config):
     criterion = torch.nn.CrossEntropyLoss()
     scheduler = getattr(torch.optim.lr_scheduler, config.scheduler)(optimizer, **config.scheduler_params) if config.scheduler is not None else None
     class Callbacks:
+        def __init__(self):
+            self.best_metric = 1e8
+            self.ckpt_folder = config.ckpt_folder
+            self.ckpt1_name = 'epoch={epoch}.ckpt'
+            self.ckpt2_name = 'epoch={epoch}-val_t1err={val_t1_err}.ckpt'
+            self.previos_ckpt = None
         def before_start(self):
+            if fabric.global_rank == 0 and self.ckpt_folder is not None:
+                os.makedirs(self.ckpt_folder, exist_ok=True)
+            # load or resume checkpoint
+            # TODO
+            # init logger
             if fabric.global_rank == 0 and config.logger is not None:
                 wandb.init(project=config.logger['project'], name=config.logger['name'], config=config)
-        def after_val(self, val_logs):
-            t1err = fabric.all_gather(val_logs['t1err'][-1])
-            scheduler.step(t1err.mean().item())
         def after_epoch(self, hist):
             gathered_hist = fabric.all_gather(hist)
+            # scheduler
+            val_t1err = gathered_hist['val_t1err'][-1].float().mean().item()
+            print("ei", val_t1err)
+            scheduler.step(val_t1err)
+            # checkpoints
+            if fabric.global_rank == 0 and self.ckpt_folder is not None:
+                ckpt_name = self.ckpt1_name.format(epoch=f"{hist['epoch'][-1]:03d}")
+                ckpt_path = os.path.join(self.ckpt_folder, ckpt_name)
+                fabric.save(ckpt_path, {
+                    'epoch': hist['epoch'][-1],
+                    'model': model,
+                    'optimizer': optimizer,
+                    'scheduler': scheduler,
+                })
+                if val_t1err < self.best_metric:
+                    self.best_metric = val_t1err    
+                    if self.previos_ckpt is not None:
+                        os.remove(self.previos_ckpt)
+                    ckpt_name = self.ckpt2_name.format(epoch=f"{hist['epoch'][-1]:03d}", val_t1_err=f'{val_t1err:.5f}')
+                    ckpt_path = os.path.join(self.ckpt_folder, ckpt_name)
+                    fabric.save(ckpt_path, {
+                        'epoch': hist['epoch'][-1],
+                        'model': model,
+                        'optimizer': optimizer,
+                        'scheduler': scheduler,
+                    })
+                    self.previos_ckpt = ckpt_path
+            # logger
             if fabric.global_rank == 0 and config.logger is not None:
-                wandb.log({k: v[-1].mean().item() for k, v in gathered_hist.items()})
+                wandb.log({k: v[-1].float().mean().item() for k, v in gathered_hist.items()})
     torch.set_float32_matmul_precision('high')
     fabric = L.Fabric(
         accelerator=config.train.accelerator, 
@@ -96,9 +131,7 @@ def train(config: Config):
         optimizer, 
         criterion,
         metrics={name: getattr(metrics, metric) for metric, name in config.metrics.items()}, 
-        device='cuda' if config.train.accelerator == 'gpu' else 'cpu',
         fabric=fabric,
-        compile=True,
         **config.train.dict()
     )
 

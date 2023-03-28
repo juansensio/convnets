@@ -1,5 +1,5 @@
 model: ResNet
-variant: r18
+variant: r34
 optimizer: SGD
 optimizer_params:
   lr: 0.1
@@ -43,8 +43,8 @@ dataloader:
         height: 224
 train:
   max_epochs: 90
-  devices: 2
-  strategy: ddp
+  # devices: 2
+  # strategy: ddp
 metrics:
   error: t1err
   top5_error: t5err
